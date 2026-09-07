@@ -455,3 +455,64 @@ class TestReasoningEffort:
         assert mock_post.call_args_list[0].kwargs["json"].get("reasoning_effort") == "high"
         # Recovered call switched to reasoning_effort="none"
         assert mock_post.call_args_list[1].kwargs["json"].get("reasoning_effort") == "none"
+
+    @pytest.mark.asyncio
+    async def test_ollama_invalid_think_value_falls_back_without_reasoning_effort(self):
+        # Ollama releases predating the "none" effort level reject it without ever naming
+        # reasoning_effort, so matching only OpenAI's wording would fail every request.
+        service = AIService()
+        ollama_rejection = _mock_response(
+            {
+                "error": 'invalid think value: "none" (must be "high", "medium", "low", true, or false)'
+            },
+            status_code=400,
+        )
+
+        with patch(
+            "httpx.AsyncClient.post", side_effect=[ollama_rejection, self._success_response()]
+        ) as mock_post:
+            content = await service.generate_text("suggest an outfit")
+
+        assert content == '{"outfits": []}'
+        assert mock_post.call_count == 2
+        assert mock_post.call_args_list[0].kwargs["json"].get("reasoning_effort") == "none"
+        assert "reasoning_effort" not in mock_post.call_args_list[1].kwargs["json"]
+
+    @pytest.mark.asyncio
+    async def test_transient_empty_response_still_retries(self):
+        service = AIService()
+        empty = _mock_response(
+            {
+                "model": "gemma3:latest",
+                "choices": [{"message": {"content": ""}, "finish_reason": "stop"}],
+            }
+        )
+
+        with patch(
+            "httpx.AsyncClient.post", side_effect=[empty, self._success_response()]
+        ) as mock_post:
+            content = await service.generate_text("suggest an outfit")
+
+        assert content == '{"outfits": []}'
+        assert mock_post.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_length_cutoff_at_lowest_effort_does_not_retry(self):
+        service = AIService()
+        truncated = _mock_response(
+            {
+                "model": "gemma4:12b",
+                "choices": [
+                    {
+                        "message": {"content": "", "reasoning": "still thinking"},
+                        "finish_reason": "length",
+                    }
+                ],
+            }
+        )
+
+        with patch("httpx.AsyncClient.post", return_value=truncated) as mock_post:
+            with pytest.raises(AIResponseTruncatedError):
+                await service.generate_text("suggest an outfit")
+
+        assert mock_post.call_count == 1
