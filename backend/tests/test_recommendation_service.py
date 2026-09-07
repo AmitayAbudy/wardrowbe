@@ -500,9 +500,7 @@ class TestIncludeItems:
         assert ai_item.id in outfit_item_ids
 
     @pytest.mark.asyncio
-    async def test_suggest_accepts_include_items(
-        self, client, test_user, auth_headers, db_session
-    ):
+    async def test_suggest_accepts_include_items(self, client, test_user, auth_headers, db_session):
         item = ClothingItem(
             user_id=test_user.id,
             type="shirt",
@@ -612,4 +610,3 @@ class TestIncludeItems:
             assert isinstance(data, list)
             assert len(data) == 3
             assert mock_generate.call_args.kwargs["count"] == 3
-

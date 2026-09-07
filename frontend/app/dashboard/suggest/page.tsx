@@ -607,8 +607,19 @@ function OutfitResultsView({
   );
 }
 
+// suggest-options materialises all three looks up front, so any the user walks away from
+// would otherwise sit in history as pending forever.
+async function discardAlternatives(outfits: Outfit[], keepId?: string) {
+  await Promise.allSettled(
+    outfits
+      .filter((o) => o.id !== keepId)
+      .map((o) => api.post(`/outfits/${o.id}/skip`))
+  );
+}
+
 function SuggestContent() {
   const t = useTranslations('suggest');
+  const tCommon = useTranslations('common');
   const searchParams = useSearchParams();
   const preselectedItemId = searchParams.get('item');
   const { data: preselectedItem } = useItem(preselectedItemId || '');
@@ -692,6 +703,10 @@ function SuggestContent() {
 
     try {
       await api.post(`/outfits/${outfitToAccept.id}/accept`);
+      // Every look was already persisted, so the ones left over are marked skipped rather
+      // than rejected: rejecting would auto-exclude their items from today's suggestions,
+      // and those items mostly overlap with the outfit just accepted.
+      await discardAlternatives(outfits, outfitToAccept.id);
       setOutfits([]);
       setSelectedOccasion(null);
     } catch (err) {
@@ -699,7 +714,8 @@ function SuggestContent() {
     }
   };
 
-  const handleTryAnother = () => {
+  const handleTryAnother = async () => {
+    await discardAlternatives(outfits);
     setOutfits([]);
     handleGenerate();
   };
@@ -728,7 +744,8 @@ function SuggestContent() {
     }
   };
 
-  const handleNewRequest = () => {
+  const handleNewRequest = async () => {
+    await discardAlternatives(outfits);
     setOutfits([]);
     setActiveOptionIndex(0);
     setIsCompareAll(false);
@@ -993,7 +1010,7 @@ function SuggestContent() {
               size="sm"
               onClick={() => setIsItemPickerOpen(false)}
             >
-              Done
+              {tCommon('done')}
             </Button>
           </div>
         </DialogContent>

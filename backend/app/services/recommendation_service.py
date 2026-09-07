@@ -861,7 +861,9 @@ class RecommendationService:
         mandatory_items_section = self._format_mandatory_items_section(include_items, number_map)
 
         worn_combinations = await self._get_recently_worn_outfit_combinations(user, days=7)
-        suggested_combinations = await self._get_recently_suggested_outfit_combinations(user, hours=12)
+        suggested_combinations = await self._get_recently_suggested_outfit_combinations(
+            user, hours=12
+        )
         avoid_combinations = worn_combinations | suggested_combinations
 
         preferences_text = self._format_preferences_for_prompt(
